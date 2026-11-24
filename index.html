@@ -177,7 +177,7 @@
     <h3>시간 정하기</h3>
     <ul>
       <li>위쪽 버튼을 누르면 해당 시간으로 맞춰짐 (시작은 시계 클릭)</li>
-      <li><b>원형 바(테두리)를 시계 방향으로 돌리듯 드래그</b>하면 분 단위로 늘어나고, 반대로 돌리면 줄어듦 (한 바퀴 = 60분, 최대 180분). PC에서는 창 어디서든 마우스 휠을 굴리면 1분씩, <code>Shift</code>+휠은 5분씩 조절됨 (타이머가 도는 중에는 남은 시간이 늘고 줄어듦, 멈춘 상태에서는 설정 시간이 바뀜)</li>
+      <li><b>원형 바(테두리)를 시계 방향으로 돌리듯 드래그</b>하면 분 단위로 늘어나고, 반대로 돌리면 줄어듦 (한 바퀴 = 60분, 최대 180분). 드래그는 타이머가 멈춰 있을 때만 되고, 타이머가 돌아가는 중이거나 지속 모드의 스톱워치 구간에서는 움직이지 않음. PC에서는 창 어디서든 마우스 휠을 굴리면 1분씩, <code>Shift</code>+휠은 5분씩 조절됨 (타이머가 도는 중에는 남은 시간이 늘고 줄어듦, 멈춘 상태에서는 설정 시간이 바뀜)</li>
       <li>입력칸: <code>7</code> = 7분, <code>1:30</code> = 1분 30초, <code>45초</code> = 45초 → <code>Enter</code>는 바로 시작, <b>설정</b>은 시간만 맞춤</li>
       <li>창을 클릭한 뒤 숫자 키를 누르고 <code>Enter</code>를 치면 바로 시작 (<code>Esc</code>는 취소)</li>
     </ul>
@@ -524,7 +524,7 @@
     if(seq){ clearAlert(); document.body.classList.remove('done'); total = left = m*60; draw(); }
     else apply(String(m), false);
   }
-  var dialEl = document.querySelector('.dial'), rd = null, justDragged = false;
+  var dialEl = document.querySelector('.dial'), rd = null, lk = null, justDragged = false;
   function onRing(cx, cy){
     var r = dialEl.getBoundingClientRect(), dx = cx-(r.left+r.width/2), dy = cy-(r.top+r.height/2), q = Math.hypot(dx,dy)/(r.width/2);
     return q >= .64 && q <= 1.1;
@@ -536,6 +536,7 @@
   dialEl.addEventListener('touchstart', function(e){ var q = e.touches[0]; if(q && onRing(q.clientX, q.clientY)) e.preventDefault(); }, { passive:false });
   dialEl.addEventListener('pointerdown', function(e){
     if(e.button > 0 || !onRing(e.clientX, e.clientY)) return;
+    if(t || over){ lk = { x:e.clientX, y:e.clientY, moved:false }; return; }
     e.preventDefault(); e.stopPropagation();
     rd = { ang:angleOf(e.clientX, e.clientY), start:Math.round(total/60), acc:0, moved:false, last:null };
     try { dialEl.setPointerCapture(e.pointerId); } catch(x){}
@@ -551,6 +552,10 @@
     if(Math.abs(rd.acc) > 3) rd.moved = true;
     if(rd.moved){ var m = Math.round(raw); if(m !== rd.last){ rd.last = m; setMinutes(m); } }
   });
+  /* 시간 조정이 잠긴 상태(진행 중·지속 모드 스톱워치)에서 끌었을 때, 끝난 뒤 탭으로 오인되어 시작·정지가 눌리지 않게 함 */
+  document.addEventListener('pointermove', function(e){ if(lk && !lk.moved && Math.hypot(e.clientX-lk.x, e.clientY-lk.y) > 8) lk.moved = true; });
+  function endLock(){ if(lk){ if(lk.moved){ justDragged = true; setTimeout(function(){ justDragged = false; }, 80); } lk = null; } }
+  document.addEventListener('pointerup', endLock); document.addEventListener('pointercancel', endLock);
   function endRing(){ if(rd){ if(rd.moved){ justDragged = true; setTimeout(function(){ justDragged = false; }, 80); } rd = null; } }
   dialEl.addEventListener('pointerup', endRing);
   dialEl.addEventListener('pointercancel', endRing);
