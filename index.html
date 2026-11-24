@@ -137,6 +137,7 @@
 </head>
 <body>
 <button class="x" id="x" title="닫기">✕</button>
+<video id="pipVid" muted playsinline style="position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none"></video>
 <div class="app">
   <div class="presets" id="presets"></div>
   <div class="dial">
@@ -158,6 +159,7 @@
   <div class="tools">
     <button id="full">⛶ 전체화면</button>
     <button id="snd">🔔 알림음 켜짐</button>
+    <button id="pip" hidden>🗗 작은 창</button>
     <button id="sus">♾ 지속 모드 꺼짐</button>
     <button id="dark">⚫ 검정 화면</button>
     <button id="help">❓ 사용 가이드</button>
@@ -219,6 +221,12 @@
       <li>시계 클릭·<code>Space</code>로 일시정지·계속, <b>초기화</b>를 누르면 처음 설정한 타이머로 돌아감</li>
       <li>순차 타이머는 모든 단계가 끝난 뒤 전체 시간 합계부터, 특정 시각까지 타이머는 계산된 시간부터 이어서 올라감</li>
       <li>켜 둔 상태는 다음에 열어도 유지됨</li>
+    </ul>
+    <h3>작은 창 (다른 앱 위에 띄우기)</h3>
+    <ul>
+      <li>휴대폰 크롬에서 "🗗 작은 창"을 누르면 시계가 작은 창으로 분리되어, 홈 화면이나 다른 앱으로 나가도 화면 위에 떠서 계속 보임 (창을 끌어 옮기고, 모서리로 크기 조절, 창을 탭하면 앱으로 돌아옴)</li>
+      <li>타이머가 돌아가는 중에 홈 화면으로 나가면 자동으로 작은 창이 뜨는 기기도 있음 (기기·크롬 버전에 따라 안 될 수 있음. 안 되면 버튼으로 먼저 띄워 두기)</li>
+      <li>작은 창에는 남은 시간과 원형 바가 표시됨. 시작·정지는 앱으로 돌아와서 조작</li>
     </ul>
     <h3>검정 화면 모드</h3>
     <ul>
@@ -355,7 +363,7 @@
   }
 
   /* ---------- 타이머 동작 ---------- */
-  function stop(){ if(t){ clearInterval(t); t = null; } lockOff(); sendState(); }
+  function stop(){ if(t){ clearInterval(t); t = null; } lockOff(); sendState(); if(typeof pipDisarm === 'function') pipDisarm(); }
   function clearAlert(){
     alertTO.forEach(clearTimeout); alertTO = []; clearTimeout(blinkTO);
     document.body.classList.remove('blink','flash');
@@ -387,12 +395,12 @@
   function run(){
     try { ctx = ctx || new (window.AudioContext||window.webkitAudioContext)(); if(ctx.state==='suspended') ctx.resume(); } catch(e){}
     if(t) return;
-    if(over){ over.t0 = Date.now() - over.el*1000; t = setInterval(tick, 200); lockOn(); sendState(); tick(); return; }
+    if(over){ over.t0 = Date.now() - over.el*1000; t = setInterval(tick, 200); lockOn(); sendState(); tick(); pipArm(); return; }
     clearAlert(); document.body.classList.remove('done');
     if(left <= 0){ if(seq){ seq.i = 0; total = left = seq.steps[0].sec; } else left = total; }
     if(targetAt && targetAt > Date.now()){ endAt = targetAt; left = (endAt - Date.now())/1000; if(left > total) total = left; }
     else { targetAt = null; targetHM = null; endAt = Date.now() + left*1000; }
-    t = setInterval(tick, 200); lockOn(); sendState(); tick();
+    t = setInterval(tick, 200); lockOn(); sendState(); tick(); pipArm();
   }
   var wl = null;
   function lockOn(){ try { if(navigator.wakeLock && !wl) navigator.wakeLock.request('screen').then(function(l){ wl = l; l.addEventListener('release', function(){ wl = null; }); }).catch(function(){}); } catch(e){} }
@@ -656,6 +664,62 @@
   }
 
   document.addEventListener('pointerdown', function(){ try { if(ctx && ctx.state === 'suspended') ctx.resume(); } catch(e){} }, true);
+
+  /* 작은 창(PIP): 시계를 캔버스에 그려 영상으로 만들고, 영상을 작은 창으로 띄움 */
+  var pip = { on:false, cv:null, cx:null, busy:false, iv:null }, pipVid = $('pipVid'), pipBtn = $('pip');
+  function pipCan(){ return !!(document.pictureInPictureEnabled && typeof pipVid.requestPictureInPicture === 'function' && typeof HTMLCanvasElement !== 'undefined' && HTMLCanvasElement.prototype.captureStream); }
+  function pipEnsure(){
+    if(!pip.cv){ pip.cv = document.createElement('canvas'); pip.cv.width = 360; pip.cv.height = 360; pip.cx = pip.cv.getContext('2d'); }
+    if(!pipVid.srcObject) pipVid.srcObject = pip.cv.captureStream(15);
+    pipDraw();
+  }
+  function pipDraw(){
+    if(!pip.cx) return;
+    var cx = pip.cx, W = 360, c = W/2, R = 150, doneState = document.body.classList.contains('done');
+    var frac, txt, sub = '', col = '#d93025', bg = '#fff6f5', ink = '#3a1f1d';
+    if(over){ frac = (over.el % 60) / 60; txt = fmt(Math.floor(over.base + over.el)); sub = '초과 +' + fmt(Math.floor(over.el)); col = '#8f0f08'; }
+    else { frac = total ? Math.max(0, left) / total : 0; txt = fmt(Math.max(0, Math.ceil(left))); if(targetHM) sub = pad2(targetHM.h) + ':' + pad2(targetHM.m) + '까지'; else if(seq) sub = (seq.steps[seq.i].name || '단계') + ' · ' + (seq.i+1) + '/' + seq.steps.length; if(left > 0 && left <= 60 && t) col = '#9c0d07'; }
+    if(doneState){ bg = '#d93025'; ink = '#fff'; col = '#fff'; sub = '시간 종료'; frac = 0; }
+    cx.fillStyle = bg; cx.fillRect(0, 0, W, W);
+    cx.lineWidth = 26; cx.lineCap = 'round';
+    cx.strokeStyle = doneState ? 'rgba(255,255,255,.25)' : '#f6cdc9'; cx.beginPath(); cx.arc(c, c, R, 0, Math.PI*2); cx.stroke();
+    if(frac > 0){ cx.strokeStyle = col; cx.beginPath(); cx.arc(c, c, R, -Math.PI/2, -Math.PI/2 + Math.PI*2*Math.min(1, frac)); cx.stroke(); }
+    var FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif';
+    cx.fillStyle = ink; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+    cx.font = '300 ' + (txt.length > 5 ? 84 : 108) + 'px ' + FONT; cx.fillText(txt, c, sub ? c - 8 : c);
+    if(sub){ cx.font = '600 28px ' + FONT; cx.globalAlpha = .75; cx.fillText(sub, c, c + 62); cx.globalAlpha = 1; }
+  }
+  function pipPaintBtn(){ pipBtn.textContent = pip.on ? '🗗 작은 창 끄기' : '🗗 작은 창'; }
+  async function pipStart(){
+    if(pip.busy || pip.on) return; pip.busy = true;
+    try {
+      pipEnsure(); pipVid.muted = true; await pipVid.play();
+      await pipVid.requestPictureInPicture(); pip.on = true;
+      clearInterval(pip.iv); pip.iv = setInterval(pipDraw, 250);
+    } catch(e){ pip.on = false; pipBtn.textContent = '이 기기에선 안 돼요'; setTimeout(pipPaintBtn, 2500); }
+    pip.busy = false; pipPaintBtn();
+  }
+  async function pipStop(){
+    pip.on = false; clearInterval(pip.iv);
+    try { if(document.pictureInPictureElement === pipVid) await document.exitPictureInPicture(); } catch(e){}
+    pipPaintBtn();
+  }
+  /* 타이머가 도는 동안 영상을 조용히 재생해 두어, 홈 화면으로 나갈 때 자동 작은 창이 뜰 수 있게 함 */
+  function pipArm(){
+    if(!pipCan()) return;
+    try {
+      pipEnsure(); pipVid.muted = true; pipVid.play().catch(function(){});
+      if('mediaSession' in navigator){
+        try { navigator.mediaSession.metadata = new MediaMetadata({ title:'수업 타이머' }); navigator.mediaSession.playbackState = 'playing'; } catch(e){}
+        try { navigator.mediaSession.setActionHandler('enterpictureinpicture', function(){ pipStart(); }); } catch(e){}
+      }
+    } catch(e){}
+  }
+  function pipDisarm(){ if(!pip || !pipVid || pip.on) return; try { pipVid.pause(); } catch(e){} }
+  pipVid.addEventListener('leavepictureinpicture', function(){ pip.on = false; clearInterval(pip.iv); pipPaintBtn(); });
+  if(pipCan()) pipBtn.hidden = false;
+  pipBtn.onclick = function(){ if(pip.on) pipStop(); else pipStart(); };
+
   setSound(sound); setSustain(sustain);
   renderPresets();
   if(!apply(curText, false)) apply('10', false);
