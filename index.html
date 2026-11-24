@@ -5,13 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>수업 타이머</title>
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="fonts/jua.css">
 <meta name="theme-color" content="#fdecea">
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>
   :root { --bg:#fdecea; --card:#fff6f5; --ink:#3a1f1d; --accent:#d93025; --track:#f6cdc9; --done:#b3140c; }
   * { box-sizing:border-box; margin:0; }
   html,body { height:100%; overscroll-behavior:none; }
-  body { background:transparent; overflow:hidden; padding:10px; color:var(--ink); font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif; display:flex; align-items:center; justify-content:center; }
+  body { background:transparent; overflow:hidden; padding:10px; color:var(--ink); font-family:"Jua",-apple-system,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif; display:flex; align-items:center; justify-content:center; }
   .app { width:100%; height:100%; display:flex; flex-direction:column; justify-content:center; background:var(--card); border-radius:28px; padding:20px 18px 16px; box-shadow:0 8px 30px rgba(140,30,20,.18); text-align:center; overflow:hidden; min-width:0; }
   body.done .app { background:#d93025; box-shadow:none; }
 
@@ -41,6 +42,9 @@
   @keyframes blink { 0% { opacity:1; } 100% { opacity:.25; } }
 
   .time { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:clamp(28px,calc(min(100vw,100vh - 300px)*.2),200px); cursor:pointer; white-space:nowrap; }
+  .tm i { display:inline-block; font-style:normal; text-align:center; }
+  .tm .d { width:.62em; }
+  .tm .c { width:.32em; }
   .tm { font-weight:300; font-variant-numeric:tabular-nums; line-height:1.1; }
   .sub { font-size:.22em; opacity:.75; margin-top:.15em; max-width:80%; overflow:hidden; text-overflow:ellipsis; }
   .sub:empty { display:none; }
@@ -50,6 +54,7 @@
   .btn { flex:1; border:0; border-radius:16px; padding:14px; font-size:18px; cursor:pointer; white-space:nowrap; background:#f9d9d6; color:var(--ink); }
   .btn.main { background:var(--accent); color:#fff; }
   .custom { display:flex; gap:6px; justify-content:center; align-items:center; margin-top:12px; }
+  button, input { font-family:inherit; }
   .custom input { flex:1; min-width:0; max-width:230px; padding:8px 10px; border-radius:10px; border:1.5px solid var(--track); font-size:15px; }
   .custom button { border:1.5px solid var(--track); background:#fff; border-radius:10px; padding:8px 11px; cursor:pointer; font-size:14px; white-space:nowrap; }
   .custom2 { margin-top:8px; font-size:14px; color:#8a4a45; }
@@ -261,7 +266,7 @@
   var $ = function(i){ return document.getElementById(i); };
   var DEFAULTS = ['1','3','5','10','15','30'];
   var total = 600, left = 600, t = null, endAt = 0, sound = true, ctx = null;
-  var APP_VERSION = 'v13', APP_DATE = '11/25 00:20';
+  var APP_VERSION = 'v15', APP_DATE = '11/25 00:46';
   var over = null, sustain = false;
   var seq = null, targetAt = null, targetHM = null, curText = '10', buf = '', bufTO = null, alertTO = [], blinkTO = null;
   var presets = DEFAULTS.slice();
@@ -321,6 +326,11 @@
   }
 
   /* ---------- 화면 ---------- */
+  var tmLast = '';
+  function showTm(str){
+    if(str === tmLast) return; tmLast = str;
+    $('tm').innerHTML = str.split('').map(function(ch){ return '<i class="' + (ch === ':' ? 'c' : 'd') + '">' + ch + '</i>'; }).join('');
+  }
   function saveRun(){
     var active = !!t || !!over || (left > 0 && left < total) || (seq && seq.i > 0);
     if(!active){ try { localStorage.removeItem('ct.run'); } catch(e){} return; }
@@ -330,7 +340,7 @@
     saveRun();
     if(over){
       var oe = over.el, sh = Math.floor(over.base + oe), B0 = document.body.classList;
-      $('tm').textContent = buf ? buf + '_' : fmt(sh);
+      showTm(buf ? buf + '_' : fmt(sh));
       bar.style.strokeDashoffset = C * (1 - ((oe % 60) / 60));
       $('sub').textContent = '초과 +' + fmt(Math.floor(oe));
       B0.remove('warn','urgent','done'); B0.add('over');
@@ -341,7 +351,7 @@
     }
     document.body.classList.remove('over');
     var shown = Math.max(0, Math.ceil(left));
-    $('tm').textContent = buf ? buf + '_' : fmt(shown);
+    showTm(buf ? buf + '_' : fmt(shown));
     bar.style.strokeDashoffset = C * (1 - (total ? left/total : 0));
     $('sub').textContent = targetHM ? (pad2(targetHM.h) + ':' + pad2(targetHM.m) + '까지') : seq ? ((seq.steps[seq.i].name || '단계') + ' · ' + (seq.i+1) + '/' + seq.steps.length) : '';
     var B = document.body.classList;
@@ -671,6 +681,7 @@
   var pip = { on:false, cv:null, cx:null, busy:false, iv:null }, pipVid = $('pipVid'), pipBtn = $('pip');
   function pipCan(){ return !!(document.pictureInPictureEnabled && typeof pipVid.requestPictureInPicture === 'function' && typeof HTMLCanvasElement !== 'undefined' && HTMLCanvasElement.prototype.captureStream); }
   function pipEnsure(){
+    try { document.fonts.load('108px Jua', '0123456789:초과종료단계까지'); } catch(e){}
     if(!pip.cv){ pip.cv = document.createElement('canvas'); pip.cv.width = 360; pip.cv.height = 360; pip.cx = pip.cv.getContext('2d'); }
     if(!pipVid.srcObject) pipVid.srcObject = pip.cv.captureStream(15);
     pipDraw();
@@ -686,7 +697,7 @@
     cx.lineWidth = 26; cx.lineCap = 'round';
     cx.strokeStyle = doneState ? 'rgba(255,255,255,.25)' : '#f6cdc9'; cx.beginPath(); cx.arc(c, c, R, 0, Math.PI*2); cx.stroke();
     if(frac > 0){ cx.strokeStyle = col; cx.beginPath(); cx.arc(c, c, R, -Math.PI/2, -Math.PI/2 + Math.PI*2*Math.min(1, frac)); cx.stroke(); }
-    var FONT = '"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif';
+    var FONT = '"Jua","Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif';
     cx.fillStyle = ink; cx.textAlign = 'center'; cx.textBaseline = 'middle';
     cx.font = '300 ' + (txt.length > 5 ? 84 : 108) + 'px ' + FONT; cx.fillText(txt, c, sub ? c - 8 : c);
     if(sub){ cx.font = '600 28px ' + FONT; cx.globalAlpha = .75; cx.fillText(sub, c, c + 62); cx.globalAlpha = 1; }
