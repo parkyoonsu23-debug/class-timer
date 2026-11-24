@@ -89,7 +89,7 @@
   body.dark .ver, body.dark .presets, body.dark .row, body.dark .custom, body.dark .custom2, body.dark .tools, body.dark .hint, body.dark .sub, body.dark .x, body.dark .guide, body.dark .frame { display:none !important; }
   body.dark.showguide .guide { display:flex !important; }
   body.dark .app { background:#000 !important; box-shadow:none !important; border-radius:0; padding:0; justify-content:center; }
-  body.dark .dial { width:min(92vw,88dvh); min-width:0; margin:0 auto; }
+  body.dark .dial { width:min(92vw,88dvh) !important; min-width:0 !important; margin:0 auto; }
   body.dark .fillc { fill:transparent; transition:none; }
   body.dark .track { stroke:#191919; }
   body.dark .bar { stroke:#e5362b; }
@@ -104,6 +104,10 @@
   body.dark.done .track { stroke:transparent; }
   body.dark.done .bar { stroke:#fff; }
   body.dark.done .tm { color:#fff; }
+  @media (orientation:portrait) {
+    body.dark.land .app { position:fixed; top:0; left:0; width:100vh; width:100dvh; height:100vw; height:100dvw; min-height:0; transform-origin:0 0; transform:translateX(100vw) rotate(90deg); }
+    body.dark.land .dhint { display:none; }
+  }
   .dhint { display:none; }
   body.dark .dhint { display:block; position:fixed; left:0; right:0; bottom:18px; text-align:center; font-size:13px; color:#555; animation:hintfade 5s forwards; pointer-events:none; z-index:6; }
   @keyframes hintfade { 0%,70% { opacity:1; } 100% { opacity:0; } }
@@ -164,6 +168,7 @@
     <button id="pip" hidden>🗗 작은 창</button>
     <button id="sus">♾ 지속 모드 꺼짐</button>
     <button id="dark">⚫ 검정 화면</button>
+    <button id="darkL">⚫ 검정 화면 (가로)</button>
     <button id="help">❓ 사용 가이드</button>
   </div>
   <div class="ver" id="ver"></div>
@@ -234,6 +239,7 @@
     <h3>검정 화면 모드</h3>
     <ul>
       <li>"⚫ 검정 화면" 버튼 또는 <code>B</code> 키: 원형 진행 바와 남은 시간만 남기고 나머지는 완전한 검정 화면</li>
+      <li>"⚫ 검정 화면 (가로)"는 화면을 가로로 돌려서 보여 줌 (휴대폰을 세로로 든 채로도 가로 방향으로 표시됨)</li>
       <li>한 번 탭: 시작·정지 / 두 번 탭(또는 <code>Esc</code>, <code>B</code>): 모드 종료</li>
       <li>이 모드에서는 화면이 꺼지지 않도록 요청함. 종료 시에는 화면 전체가 빨갛게 깜빡임</li>
     </ul>
@@ -255,7 +261,7 @@
   var $ = function(i){ return document.getElementById(i); };
   var DEFAULTS = ['1','3','5','10','15','30'];
   var total = 600, left = 600, t = null, endAt = 0, sound = true, ctx = null;
-  var APP_VERSION = 'v11', APP_DATE = '11/24 23:46';
+  var APP_VERSION = 'v13', APP_DATE = '11/25 00:20';
   var over = null, sustain = false;
   var seq = null, targetAt = null, targetHM = null, curText = '10', buf = '', bufTO = null, alertTO = [], blinkTO = null;
   var presets = DEFAULTS.slice();
@@ -560,21 +566,24 @@
 
 
   /* 검정 화면 모드 */
-  var dark = false, lastTap = 0, tapTO = null;
-  function setDark(on){
-    dark = on; document.body.classList.toggle('dark', on);
+  var dark = false, lastTap = 0, tapTO = null, darkAt = 0;
+  function setDark(on, land){
+    dark = on; document.body.classList.toggle('dark', on); document.body.classList.toggle('land', !!(on && land));
     if(on){
       lockOn();
-      if(!ipc){ try { document.documentElement.requestFullscreen().catch(function(){}); } catch(e){} }
+      if(!ipc){ try { document.documentElement.requestFullscreen().then(function(){ if(land && screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function(){}); }).catch(function(){}); } catch(e){} }
     } else {
       if(!t) lockOff();
+      try { if(screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch(e){}
       if(!ipc){ try { if(document.fullscreenElement) document.exitFullscreen(); } catch(e){} }
     }
   }
-  $('dark').onclick = function(){ setDark(true); };
+  $('dark').onclick = function(e){ e.stopPropagation(); setDark(true, false); darkAt = Date.now(); };
+  $('darkL').onclick = function(e){ e.stopPropagation(); setDark(true, true); darkAt = Date.now(); };
   document.addEventListener('click', function(e){
     if(!dark || e.target.closest('.guide')) return;
     var now = Date.now();
+    if(now - darkAt < 500) return;
     if(now - lastTap < 350){ clearTimeout(tapTO); lastTap = 0; setDark(false); }
     else { lastTap = now; tapTO = setTimeout(toggle, 350); }
   });
