@@ -252,6 +252,7 @@
 
   function load(k, d){ try { var v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch(e){ return d; } }
   function store(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+  var savedRun = load('ct.run', null);
   presets = load('ct.presets', presets); sound = load('ct.sound', true); curText = load('ct.last', '10'); sustain = load('ct.sustain', false);
 
   /* ---------- 입력 해석 ---------- */
@@ -302,7 +303,13 @@
   }
 
   /* ---------- 화면 ---------- */
+  function saveRun(){
+    var active = !!t || !!over || (left > 0 && left < total) || (seq && seq.i > 0);
+    if(!active){ try { localStorage.removeItem('ct.run'); } catch(e){} return; }
+    store('ct.run', { run:!!t, endAt:endAt, total:total, left:left, seqI:seq?seq.i:0, text:curText, targetAt:targetAt, targetHM:targetHM, over:over?{ base:over.base, el:over.el, t0:over.t0 }:null });
+  }
   function draw(){
+    saveRun();
     if(over){
       var oe = over.el, sh = Math.floor(over.base + oe), B0 = document.body.classList;
       $('tm').textContent = buf ? buf + '_' : fmt(sh);
@@ -413,17 +420,20 @@
   }
   function chime(){ tones([[1175,0,.18],[1568,.22,.3]]); }
   function alarmRound(){ tones([[880,0,.35],[880,.45,.35],[880,.9,.35],[1175,1.35,.5]]); }
-  function finishAll(){
+  function finishAll(quiet){
     left = 0;
     var B = document.body.classList;
     if(sustain){
       var base = seq ? seq.steps.reduce(function(a,x){ return a + x.sec; }, 0) : total;
-      over = { base:base, el:Math.max(0,(Date.now()-endAt)/1000), t0:endAt }; B.add('blink'); sendState(); draw();
-    } else { stop(); draw(); B.add('done','blink'); }
-    var n = 0; (function r(){ alarmRound(); if(++n < 4) alertTO.push(setTimeout(r, 2600)); })();
-    blinkTO = setTimeout(function(){ B.remove('blink'); }, 12000);
-    if(ipc) ipc.send('alert');
-    try { if(navigator.vibrate) navigator.vibrate([400,200,400,200,400]); } catch(e){}
+      over = { base:base, el:Math.max(0,(Date.now()-endAt)/1000), t0:endAt }; sendState();
+    } else { stop(); B.add('done'); }
+    if(!quiet){
+      B.add('blink');
+      var n = 0; (function r(){ alarmRound(); if(++n < 4) alertTO.push(setTimeout(r, 2600)); })();
+      blinkTO = setTimeout(function(){ B.remove('blink'); }, 12000);
+      if(ipc) ipc.send('alert');
+      try { if(navigator.vibrate) navigator.vibrate([400,200,400,200,400]); } catch(e){}
+    }
     draw();
   }
   function tick(){
@@ -645,9 +655,28 @@
     document.addEventListener('mouseup', function(){ if(rs){ rs = null; ipc.send('settled'); } });
   }
 
+  document.addEventListener('pointerdown', function(){ try { if(ctx && ctx.state === 'suspended') ctx.resume(); } catch(e){} }, true);
   setSound(sound); setSustain(sustain);
   renderPresets();
   if(!apply(curText, false)) apply('10', false);
+  /* 뒤로 가기·새로고침 후에도 진행 중이던 타이머 이어서 복원 */
+  (function(){
+    var r = savedRun; if(!r || !r.text) return;
+    var tg = parseTarget(r.text), st = tg ? null : parseSeq(r.text);
+    seq = (st && !(st.length === 1 && !st[0].name)) ? { steps:st, i:Math.min(r.seqI||0, st.length-1) } : null;
+    curText = r.text; $('inp').value = curText; total = r.total; targetAt = r.targetAt || null; targetHM = r.targetHM || null;
+    if(r.over){
+      over = { base:r.over.base, el:r.over.el, t0:r.over.t0 };
+      if(r.run){ over.el = (Date.now()-over.t0)/1000; run(); } else draw();
+      return;
+    }
+    if(!r.run){ left = r.left; draw(); return; }
+    var cur = r.endAt, now = Date.now();
+    while(cur <= now && seq && seq.i < seq.steps.length-1){ seq.i++; total = seq.steps[seq.i].sec; cur += total*1000; }
+    if(cur <= now){ endAt = cur; t = null; finishAll(true); if(over && !t) run(); return; }
+    if(seq) total = seq.steps[seq.i].sec;
+    left = (cur - now)/1000; run();
+  })();
   sendState();
   if(!load('ct.seen', false)) openGuide();
   if('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(function(){});
