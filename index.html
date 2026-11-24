@@ -177,7 +177,7 @@
     <h3>시간 정하기</h3>
     <ul>
       <li>위쪽 버튼을 누르면 해당 시간으로 맞춰짐 (시작은 시계 클릭)</li>
-      <li><b>원형 바(테두리)를 시계 방향으로 돌리듯 드래그</b>하면 분 단위로 늘어나고, 반대로 돌리면 줄어듦 (한 바퀴 = 60분, 최대 180분). 드래그는 타이머가 멈춰 있을 때만 되고, 타이머가 돌아가는 중이거나 지속 모드의 스톱워치 구간에서는 움직이지 않음. PC에서는 창 어디서든 마우스 휠을 굴리면 1분씩, <code>Shift</code>+휠은 5분씩 조절됨 (타이머가 도는 중에는 남은 시간이 늘고 줄어듦, 멈춘 상태에서는 설정 시간이 바뀜)</li>
+      <li><b>원형 바(테두리)를 시계 방향으로 돌리듯 드래그</b>하면 분 단위로 늘어나고, 반대로 돌리면 줄어듦 (한 바퀴 = 60분, 최대 180분). 드래그는 타이머가 멈춰 있을 때만 되고, 타이머가 돌아가는 중이거나 지속 모드의 스톱워치 구간에서는 움직이지 않음.</li>
       <li>입력칸: <code>7</code> = 7분, <code>1:30</code> = 1분 30초, <code>45초</code> = 45초 → <code>Enter</code>는 바로 시작, <b>설정</b>은 시간만 맞춤</li>
       <li>창을 클릭한 뒤 숫자 키를 누르고 <code>Enter</code>를 치면 바로 시작 (<code>Esc</code>는 취소)</li>
     </ul>
@@ -508,14 +508,7 @@
 
 
 
-  /* 원형 바를 돌려서 분 단위 조절 (+ 마우스 휠) */
-  function adjustBy(n){
-    if(over) return;
-    if(t){
-      targetAt = null; targetHM = null;
-      left = Math.max(1, Math.min(180*60, left + n*60)); total = Math.max(total + n*60, left); endAt = Date.now() + left*1000; draw();
-    } else setMinutes(Math.round(total/60) + n);
-  }
+  /* 원형 바를 돌려서 분 단위 조절 */
   function setMinutes(m){
     if(over) return;
     m = Math.max(1, Math.min(180, m));
@@ -560,16 +553,7 @@
   dialEl.addEventListener('pointerup', endRing);
   dialEl.addEventListener('pointercancel', endRing);
   document.addEventListener('click', function(e){ if(justDragged){ e.stopPropagation(); e.preventDefault(); justDragged = false; } }, true);
-  var wacc = 0;
-  (ipc ? document : dialEl).addEventListener('wheel', function(e){
-    if(e.target.closest && e.target.closest('input,.gb')) return;
-    if(document.body.classList.contains('showguide')) return;
-    e.preventDefault();
-    var step = e.shiftKey ? 5 : 1, n = 0;
-    if(Math.abs(e.deltaY) >= 50){ n = e.deltaY < 0 ? 1 : -1; wacc = 0; }
-    else { wacc += -e.deltaY; if(Math.abs(wacc) >= 50){ n = wacc > 0 ? 1 : -1; wacc = 0; } }
-    if(n) adjustBy(n*step);
-  }, { passive:false });
+
 
   /* 검정 화면 모드 */
   var dark = false, lastTap = 0, tapTO = null;
