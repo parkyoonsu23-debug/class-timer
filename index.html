@@ -658,12 +658,13 @@
   var pip = { on:false, cv:null, cx:null, busy:false, iv:null }, pipVid = $('pipVid'), pipBtn = $('pip');
   function pipCan(){ return !!(document.pictureInPictureEnabled && typeof pipVid.requestPictureInPicture === 'function' && typeof HTMLCanvasElement !== 'undefined' && HTMLCanvasElement.prototype.captureStream); }
   function pipEnsure(){
-    if(!pip.cv){ pip.cv = document.createElement('canvas'); pip.cv.width = 360; pip.cv.height = 360; pip.cx = pip.cv.getContext('2d'); }
+    if(!pip.cv){ pip.cv = document.createElement('canvas'); pip.cv.width = 180; pip.cv.height = 180; pip.cx = pip.cv.getContext('2d'); }
     if(!pipVid.srcObject) pipVid.srcObject = pip.cv.captureStream(15);
     pipDraw();
   }
   function pipDraw(){
     if(!pip.cx) return;
+    pip.cx.setTransform(.5, 0, 0, .5, 0, 0);
     var cx = pip.cx, W = 360, c = W/2, R = 150, doneState = document.body.classList.contains('done');
     var frac, txt, sub = '', col = '#d93025', bg = '#fff6f5', ink = '#3a1f1d';
     if(over){ frac = (over.el % 60) / 60; txt = fmt(Math.floor(over.base + over.el)); sub = '초과 +' + fmt(Math.floor(over.el)); col = '#8f0f08'; }
